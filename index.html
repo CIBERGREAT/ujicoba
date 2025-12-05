@@ -1,325 +1,56 @@
 <!doctype html>
-<html lang="id">
+<html>
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Upload & Kelola Foto — Simple Gallery</title>
-  <style>
-    :root{
-      --bg:#0f1724; --card:#0b1220; --muted:#94a3b8; --accent:#06b6d4;
-      --white:#f8fafc;
-    }
-    *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;
-      background:linear-gradient(180deg,#071029 0%, #081427 100%);
-      color:var(--white);
-      padding:24px;
-      min-height:100vh;
-    }
-    h1{margin:0 0 12px;font-size:20px}
-    .container{max-width:1000px;margin:0 auto;}
-    .top{
-      display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:18px;
-    }
-    .uploader{
-      border:2px dashed rgba(255,255,255,0.06);
-      background:linear-gradient(90deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
-      padding:18px;border-radius:12px;flex:1;min-width:280px;
-      display:flex;align-items:center;gap:12px;
-    }
-    .uploader.dragover{border-color:rgba(6,182,212,0.6)}
-    .uploader input[type=file]{display:none}
-    .btn{
-      background:var(--accent);color:#012; padding:8px 12px;border-radius:8px;border:none;
-      cursor:pointer;font-weight:600;
-    }
-    .controls{display:flex;gap:8px;align-items:center}
-    .small{font-size:13px;color:var(--muted)}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-top:18px}
-    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:10px;border-radius:10px;overflow:hidden;position:relative}
-    .thumb{width:100%;height:160px;object-fit:cover;border-radius:8px;background:#0b1220}
-    .meta{margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:space-between}
-    .caption{flex:1;margin-right:8px}
-    .caption input{width:100%;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--white)}
-    .actions{display:flex;gap:6px}
-    .icon-btn{background:transparent;border:1px solid rgba(255,255,255,0.03);padding:6px;border-radius:8px;color:var(--muted);cursor:pointer}
-    .footer{margin-top:18px;color:var(--muted);font-size:13px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
-    .note{font-size:13px;color:var(--muted)}
-    .hidden{display:none}
-    .search{padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03);color:var(--white)}
-    @media (max-width:600px){
-      .thumb{height:140px}
-    }
-  </style>
+  <title>Share Location Demo</title>
 </head>
 <body>
-  <div class="container">
-    <h1>Simple Image Gallery — Upload & Kelola Foto</h1>
-    <div class="top">
-      <label class="uploader" id="dropZone">
-        <div>
-          <strong>Tarik & lepas file di sini</strong>
-          <div class="small">Atau klik tombol "Pilih File" untuk mengunggah (jpg, png, webp).</div>
-        </div>
-        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-          <input id="fileInput" type="file" accept="image/*" multiple>
-          <button class="btn" id="pickBtn">Pilih File</button>
-        </div>
-      </label>
+  <h1>Share Location (Demo, butuh HTTPS)</h1>
+  <label>Nama: <input id="name" /></label>
+  <button id="shareBtn">Bagikan Lokasi</button>
+  <p id="status"></p>
 
-      <div class="controls">
-        <input id="search" class="search" placeholder="Cari berdasarkan judul..." />
-        <button class="btn" id="clearAll">Hapus Semua</button>
-        <button class="btn" id="exportBtn">Ekspor JSON</button>
-        <label style="display:inline-block">
-          <input id="importInput" type="file" accept="application/json" class="hidden">
-          <button class="btn" id="importBtn">Impor JSON</button>
-        </label>
-      </div>
-    </div>
+  <script>
+    const shareBtn = document.getElementById('shareBtn');
+    const status = document.getElementById('status');
 
-    <div id="gallery" class="grid" aria-live="polite"></div>
+    shareBtn.addEventListener('click', async () => {
+      const name = document.getElementById('name').value.trim();
+      if (!name) { status.textContent = 'Masukkan nama dulu.'; return; }
 
-    <div class="footer">
-      <div class="note">Gambar disimpan di browser (localStorage). Tidak otomatis di-upload ke server. Cocok untuk demo/situs statis.</div>
-      <div class="note">Ingin simpan ke server? Saya bisa tambahkan contoh endpoint server (PHP / Node) — bilang saja.</div>
-    </div>
-  </div>
-
-<script>
-(() => {
-  const fileInput = document.getElementById('fileInput');
-  const pickBtn = document.getElementById('pickBtn');
-  const dropZone = document.getElementById('dropZone');
-  const gallery = document.getElementById('gallery');
-  const clearAll = document.getElementById('clearAll');
-  const exportBtn = document.getElementById('exportBtn');
-  const importBtn = document.getElementById('importBtn');
-  const importInput = document.getElementById('importInput');
-  const search = document.getElementById('search');
-
-  const STORAGE_KEY = 'simple_image_gallery_v1';
-
-  let items = load();
-
-  function save(){
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    } catch(e){
-      alert('Gagal menyimpan: ' + e.message);
-    }
-  }
-
-  function load(){
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if(!raw) return [];
-      return JSON.parse(raw);
-    } catch(e){
-      console.warn('Load error', e);
-      return [];
-    }
-  }
-
-  function render(filter=''){
-    gallery.innerHTML = '';
-    const list = items.filter(it => it.title.toLowerCase().includes(filter.toLowerCase()));
-    if(list.length === 0){
-      gallery.innerHTML = `<div style="color:var(--muted);grid-column:1/-1;padding:20px;border-radius:8px;background:rgba(255,255,255,0.01)">Belum ada gambar. Unggah dulu :)</div>`;
-      return;
-    }
-    for(const it of list){
-      const card = document.createElement('div');
-      card.className = 'card';
-      card.dataset.id = it.id;
-
-      const img = document.createElement('img');
-      img.className = 'thumb';
-      img.src = it.data;
-      img.alt = it.title || 'photo';
-      img.loading = 'lazy';
-
-      const meta = document.createElement('div');
-      meta.className = 'meta';
-
-      const captionWrap = document.createElement('div');
-      captionWrap.className = 'caption';
-      const input = document.createElement('input');
-      input.value = it.title || '';
-      input.placeholder = 'Judul / keterangan...';
-      input.addEventListener('change', e => {
-        it.title = e.target.value;
-        save();
-        // live update filter
-        if(search.value) render(search.value);
-      });
-
-      captionWrap.appendChild(input);
-
-      const actions = document.createElement('div');
-      actions.className = 'actions';
-
-      const dl = document.createElement('button');
-      dl.className = 'icon-btn';
-      dl.title = 'Download';
-      dl.textContent = '⬇';
-      dl.addEventListener('click', () => downloadImage(it));
-
-      const del = document.createElement('button');
-      del.className = 'icon-btn';
-      del.title = 'Hapus';
-      del.textContent = '🗑';
-      del.addEventListener('click', () => {
-        if(confirm('Yakin ingin menghapus gambar ini?')) {
-          items = items.filter(x => x.id !== it.id);
-          save(); render(search.value);
-        }
-      });
-
-      actions.appendChild(dl);
-      actions.appendChild(del);
-
-      meta.appendChild(captionWrap);
-      meta.appendChild(actions);
-
-      card.appendChild(img);
-      card.appendChild(meta);
-      gallery.appendChild(card);
-    }
-  }
-
-  function downloadImage(item){
-    const a = document.createElement('a');
-    a.href = item.data;
-    const safeName = (item.title || 'image').replace(/[^a-z0-9\-_.]/gi,'_').slice(0,60);
-    a.download = safeName + '.png';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  }
-
-  function handleFiles(files){
-    const arr = Array.from(files).slice(0, 30); // batas upload batch
-    const readers = arr.map(file => {
-      if(!file.type.startsWith('image/')) return Promise.resolve(null);
-      return new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = e => {
-          // Simpan sebagai data URL (base64)
-          res({
-            id: cryptoRandomId(),
-            name: file.name,
-            title: file.name.replace(/\.[^/.]+$/, ""),
-            size: file.size,
-            type: file.type,
-            data: e.target.result,
-            created: Date.now(),
-          });
-        };
-        r.onerror = () => res(null);
-        r.readAsDataURL(file);
-      });
-    });
-
-    Promise.all(readers).then(results => {
-      const good = results.filter(Boolean);
-      if(good.length === 0) return;
-      // gabungkan ke items (di depan)
-      items = good.concat(items);
-      save();
-      render(search.value);
-    });
-  }
-
-  // small util for id
-  function cryptoRandomId(){
-    // 12-char id
-    return Array.from(crypto.getRandomValues(new Uint8Array(9))).map(b => ('0'+b.toString(16)).slice(-2)).join('');
-  }
-
-  // events
-  pickBtn.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', e => {
-    if(e.target.files) handleFiles(e.target.files);
-    e.target.value = '';
-  });
-
-  // drag & drop
-  ;['dragenter','dragover'].forEach(ev => {
-    dropZone.addEventListener(ev, e => {
-      e.preventDefault(); e.stopPropagation();
-      dropZone.classList.add('dragover');
-    });
-  });
-  ;['dragleave','drop'].forEach(ev => {
-    dropZone.addEventListener(ev, e => {
-      e.preventDefault(); e.stopPropagation();
-      dropZone.classList.remove('dragover');
-    });
-  });
-  dropZone.addEventListener('drop', e => {
-    const dt = e.dataTransfer;
-    if(dt && dt.files) handleFiles(dt.files);
-  });
-
-  clearAll.addEventListener('click', () => {
-    if(confirm('Hapus semua gambar dari penyimpanan browser?')) {
-      items = [];
-      save();
-      render();
-    }
-  });
-
-  exportBtn.addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify(items, null, 2)], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'gallery-export.json';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  });
-
-  importBtn.addEventListener('click', () => importInput.click());
-  importInput.addEventListener('change', e => {
-    const f = e.target.files && e.target.files[0];
-    if(!f) return;
-    const r = new FileReader();
-    r.onload = ev => {
-      try {
-        const parsed = JSON.parse(ev.target.result);
-        if(!Array.isArray(parsed)) throw new Error('Format tidak valid');
-        // optional: merge but avoid duplicates by id
-        const existingIds = new Set(items.map(i => i.id));
-        const toAdd = parsed.filter(p => p && p.id && !existingIds.has(p.id)).slice(0,200);
-        items = items.concat(toAdd);
-        save();
-        render(search.value);
-        alert('Impor berhasil. Ditambahkan: ' + toAdd.length + ' item');
-      } catch(err){
-        alert('Gagal impor: ' + err.message);
+      if (!navigator.geolocation) {
+        status.textContent = 'Geolocation tidak didukung di browser ini.';
+        return;
       }
-    };
-    r.readAsText(f);
-    e.target.value = '';
-  });
 
-  search.addEventListener('input', e => render(e.target.value));
+      status.textContent = 'Meminta izin lokasi...';
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        const payload = {
+          name,
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          timestamp: new Date().toISOString()
+        };
 
-  // initial render
-  render();
-
-  // helpful: expose items for debugging (dev console)
-  window.__gallery = {
-    getItems: () => items,
-    clearStorage: () => { items=[]; save(); render(); }
-  };
-
-})();
-</script>
+        try {
+          const res = await fetch('/api/location', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (res.ok) {
+            status.textContent = 'Lokasi terkirim dengan sukses.';
+          } else {
+            status.textContent = 'Gagal mengirim lokasi.';
+          }
+        } catch (e) {
+          status.textContent = 'Error mengirim: ' + e.message;
+        }
+      }, (err) => {
+        status.textContent = 'Izin lokasi ditolak atau error: ' + err.message;
+      }, { enableHighAccuracy: true, timeout: 10000 });
+    });
+  </script>
 </body>
 </html>
